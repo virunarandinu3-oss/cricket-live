@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TEAM VIRU — Live Score</title>
+<meta name="description" content="Live cricket scoreboard by Team VIRU" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏏</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy: #080d1a;
+    --navy-2: #101b33;
+    --panel: #0d1730;
+    --white: #f4f7fa;
+    --mist: #8fa1c2;
+    --pitch: #34d399;
+    --ball: #e11d48;
+    --gold: #f5b942;
+    --line: rgba(244,247,250,0.09);
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'Manrope', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background: var(--navy);
+    color: var(--white);
+    font-family: var(--font-body);
+    display:flex;
+    flex-direction:column;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* ---------- ambient floodlight background & particles ---------- */
+  .stadium-bg{
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(circle at 15% 15%, rgba(52,211,153,0.16), transparent 45%),
+      radial-gradient(circle at 85% 20%, rgba(245,185,66,0.13), transparent 45%),
+      radial-gradient(circle at 50% 100%, rgba(56,189,248,0.10), transparent 55%);
+    filter: blur(10px);
+    animation: driftLights 20s ease-in-out infinite alternate;
+  }
+  .stadium-bg::after{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+    opacity:.5;
+  }
+  @keyframes driftLights{
+    0%{ transform: translate3d(0,0,0) scale(1); }
+    100%{ transform: translate3d(-3%, 3%, 0) scale(1.1); }
+  }
+
+  /* Hardware accelerated particle system */
+  #particles, #flashes { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+  .particle {
+    position: absolute;
+    width: 3px; height: 3px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+    animation: floatParticle linear infinite;
+  }
+  @keyframes floatParticle {
+    0% { transform: translate3d(0, 0, 0); opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translate3d(20px, -100vh, 0); opacity: 0; }
+  }
+
+  /* Camera flashes for live match vibe */
+  .camera-flash {
+    position: absolute;
+    width: 100px; height: 100px;
+    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 70%);
+    border-radius: 50%;
+    opacity: 0;
+    animation: quickFlash ease-out forwards;
+    mix-blend-mode: overlay;
+  }
+  @keyframes quickFlash {
+    0% { opacity: 0; transform: scale(0.2); }
+    10% { opacity: 0.8; transform: scale(1.5); }
+    100% { opacity: 0; transform: scale(3); }
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:relative; z-index:2;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px clamp(16px, 4vw, 40px) 6px;
+  }
+  .brand{
+    font-family: var(--font-display);
+    font-size: clamp(20px, 3vw, 28px);
+    letter-spacing: 2px;
+    color: var(--white);
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand em{
+    font-style:normal;
+    color: var(--pitch);
+    text-shadow: 0 0 14px rgba(52,211,153,0.8);
+    animation: neonPulse 2s infinite alternate;
+  }
+  @keyframes neonPulse {
+    from { text-shadow: 0 0 10px rgba(52,211,153,0.5); }
+    to { text-shadow: 0 0 20px rgba(52,211,153,1), 0 0 30px rgba(52,211,153,0.6); }
+  }
+
+  .clock{
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.6vw, 13px);
+    color: var(--mist);
+    letter-spacing: .5px;
+    text-align:right;
+  }
+  .clock b{ color: var(--white); font-weight:600; }
+
+  /* ---------- main scoreboard ---------- */
+  main{
+    position:relative; z-index:2;
+    flex:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 24px 16px 40px;
+  }
+
+  .panel{
+    width:100%;
+    max-width: 980px;
+    background: linear-gradient(180deg, rgba(13,23,48,0.95), rgba(16,27,51,0.98));
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 18px;
+    box-shadow:
+      0 30px 60px -20px rgba(0,0,0,0.8),
+      0 0 40px rgba(52,211,153,0.05),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+    position:relative;
+    overflow:hidden;
+    padding: 22px clamp(16px,4vw,32px) 20px;
+    animation: panelBreathe 4s infinite alternate ease-in-out;
+  }
+  @keyframes panelBreathe {
+    0% { box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 0 20px rgba(52,211,153,0.02), inset 0 1px 0 rgba(255,255,255,0.08); }
+    100% { box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 0 50px rgba(52,211,153,0.15), inset 0 1px 0 rgba(255,255,255,0.08); }
+  }
+
+  .panel::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0; width:4px;
+    background: linear-gradient(180deg, var(--pitch), var(--gold));
+    box-shadow: 0 0 20px rgba(52,211,153,0.8);
+    animation: borderGlow 2s infinite alternate;
+  }
+  @keyframes borderGlow {
+    from { box-shadow: 0 0 15px rgba(52,211,153,0.5); }
+    to { box-shadow: 0 0 30px rgba(245,185,66,0.9); }
+  }
+
+  .live-row{
+    display:flex; align-items:center; justify-content:flex-start;
+    margin-bottom: 14px;
+  }
+  .live-badge{
+    position: relative;
+    display:inline-flex; align-items:center; gap:7px;
+    font-family: var(--font-mono);
+    font-size: 12px; font-weight:700; letter-spacing:2px;
+    color: var(--pitch);
+    background: rgba(52,211,153,0.15);
+    border: 1px solid rgba(52,211,153,0.5);
+    padding: 5px 14px 5px 12px;
+    border-radius: 999px;
+    box-shadow: 0 0 15px rgba(52,211,153,0.2);
+    overflow: hidden;
+  }
+  /* Radar ripple effect on live badge */
+  .live-badge::after {
+    content: ''; position: absolute; inset: 0;
+    border-radius: 999px; border: 1px solid var(--pitch);
+    animation: radarRipple 2s linear infinite;
+  }
+  @keyframes radarRipple {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .dot{
+    width:8px; height:8px; border-radius:50%;
+    background: var(--pitch);
+    box-shadow: 0 0 8px var(--pitch);
+    animation: pulseDot 1.2s infinite alternate;
+  }
+  .dot.err{ background: var(--ball); animation-duration:.9s; box-shadow: 0 0 8px var(--ball); }
+  @keyframes pulseDot{
+    0% { transform: scale(0.8); opacity: 0.7; }
+    100% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 12px var(--pitch); }
+  }
+
+  .team-score-row{
+    display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+    margin-bottom: 8px;
+  }
+  .team-name{
+    font-family: var(--font-display);
+    font-size: clamp(22px, 5vw, 34px);
+    letter-spacing: 2px;
+    color: var(--white);
+  }
+  .score-value{
+    font-family: var(--font-display);
+    font-size: clamp(48px, 10vw, 78px);
+    line-height: 1;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(245,185,66,0.5);
+    animation: scorePulse 2s infinite alternate;
+  }
+  @keyframes scorePulse {
+    from { text-shadow: 0 0 15px rgba(245,185,66,0.4); transform: scale(1); }
+    to { text-shadow: 0 0 35px rgba(245,185,66,0.9), 0 0 10px rgba(255,255,255,0.4); transform: scale(1.02); }
+  }
+
+  .overs-value{
+    font-family: var(--font-mono);
+    font-size: clamp(15px, 2.4vw, 18px);
+    color: var(--mist);
+  }
+  .overs-value b{ color: var(--white); font-weight:700; }
+
+  /* flip animation applied on data change */
+  .flip{ animation: flipUpdate .6s cubic-bezier(0.4, 0, 0.2, 1); transform-style:preserve-3d; }
+  @keyframes flipUpdate{
+    0%{ transform: rotateX(0deg) translateY(0); opacity:1; }
+    50%{ transform: rotateX(90deg) translateY(-10px); opacity:.2; color: var(--white); }
+    100%{ transform: rotateX(0deg) translateY(0); opacity:1; }
+  }
+
+  .divider{ height:1px; background: var(--line); margin: 16px 0; }
+
+  .section-label{
+    font-family: var(--font-mono);
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--mist); margin-bottom: 10px;
+  }
+
+  .batsmen{ display:flex; flex-direction:column; gap:8px; }
+  .bat-row{
+    display:flex; align-items:center; gap:10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+  }
+  .bat-row.striker{
+    border-color: rgba(52,211,153,0.4);
+    background: rgba(52,211,153,0.1);
+    box-shadow: 0 0 20px rgba(52,211,153,0.15);
+    animation: strikerBreathe 3s infinite alternate;
+  }
+  @keyframes strikerBreathe {
+    from { background: rgba(52,211,153,0.05); }
+    to { background: rgba(52,211,153,0.15); }
+  }
+
+  .bat-indicator{ width:18px; text-align:center; font-size:14px; filter: drop-shadow(0 0 6px rgba(52,211,153,.9)); }
+  .bat-name{
+    flex:1;
+    font-family: var(--font-body); font-weight:700; font-size: 15px;
+    color: var(--white);
+  }
+  .bat-row.striker .bat-name{ color: var(--pitch); text-shadow: 0 0 8px rgba(52,211,153,0.4); }
+  .bat-score{
+    font-family: var(--font-mono); font-weight:700; font-size: 15px;
+    color: var(--mist);
+  }
+  .bat-row.striker .bat-score{ color: var(--white); }
+
+  .bowler-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: rgba(225,29,72,0.08);
+    border: 1px solid rgba(225,29,72,0.3);
+    box-shadow: inset 0 0 15px rgba(225,29,72,0.1);
+  }
+  .bowler-name{
+    font-family: var(--font-body); font-weight:700; font-size: 15px;
+    color: var(--white);
+  }
+  .bowler-tag{
+    font-family: var(--font-mono); font-size: 11px; letter-spacing:1.5px;
+    color: var(--ball);
+    text-shadow: 0 0 5px rgba(225,29,72,0.5);
+  }
+
+  .recent-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chip{
+    position: relative;
+    width: 32px; height:32px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-mono); font-weight:700; font-size:13px;
+    background: rgba(255,255,255,0.05);
+    color: var(--white);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+  @keyframes popIn {
+    0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  .chip.zero{ color: var(--mist); }
+  .chip.four{ 
+    background: rgba(245,185,66,0.18); color: var(--gold); 
+    box-shadow: 0 0 12px rgba(245,185,66,.5); border-color: rgba(245,185,66,.6); 
+  }
+  .chip.six{ 
+    background: linear-gradient(135deg, var(--gold), #ff8c00); 
+    color: var(--navy); box-shadow: 0 0 18px rgba(245,185,66,.8); 
+    border-color: var(--gold); font-weight:800; transform: scale(1.1);
+  }
+  
+  /* Shine sweep for 4s and 6s */
+  .chip.four::before, .chip.six::before {
+    content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
+    transform: skewX(-20deg);
+    animation: metallicShine 3s infinite;
+  }
+  @keyframes metallicShine {
+    0% { left: -150%; }
+    20% { left: 200%; }
+    100% { left: 200%; }
+  }
+
+  .chip.wicket{ background: var(--ball); color:#fff; box-shadow: 0 0 15px rgba(225,29,72,.8); border-color: var(--ball); }
+  .chip.other{ background: rgba(56,189,248,0.15); color:#7dd3fc; border-color: rgba(56,189,248,.5); font-size:11px; }
+  .chip-empty{ color: var(--mist); font-family: var(--font-mono); font-size:13px; }
+
+  /* ---------- footer LED marquee ---------- */
+  footer{
+    position:relative; z-index:2;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 5px),
+      linear-gradient(90deg, var(--navy-2), #152240, var(--navy-2));
+    padding: 12px 0;
+    overflow:hidden;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+  }
+  .marquee-track{
+    display:inline-flex;
+    white-space:nowrap;
+    animation: scrollLeft 20s linear infinite;
+    font-family: var(--font-mono);
+    font-weight:700;
+    font-size: clamp(12px,2.4vw,15px);
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-shadow: 0 0 12px rgba(245,185,66,.6);
+  }
+  .marquee-track span{ padding: 0 28px; }
+  .marquee-track span.dim{ color: var(--pitch); text-shadow: 0 0 12px rgba(52,211,153,.6); }
+  @keyframes scrollLeft{
+    from{ transform: translate3d(0, 0, 0); }
+    to{ transform: translate3d(-50%, 0, 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .stadium-bg, .dot, .marquee-track, .particle, .camera-flash, .panel, .score-value{ animation: none !important; }
+    .flip{ animation: none !important; }
+  }
+
+  @media (max-width: 560px){
+    .team-score-row{ flex-direction:column; align-items:flex-start; gap:4px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="stadium-bg"></div>
+  <div id="particles"></div>
+  <div id="flashes"></div>
+
+  <header class="topbar">
+    <div class="brand">🏏 <em>TEAM</em>&nbsp;VIRU</div>
+    <div class="clock" id="clock">— — —</div>
+  </header>
+
+  <main>
+    <div class="panel">
+      <div class="live-row">
+        <span class="live-badge"><span class="dot" id="liveDot"></span> LIVE</span>
+      </div>
+
+      <div class="team-score-row">
+        <span class="team-name" id="teamName">—</span>
+        <span class="score-value" id="scoreVal">—</span>
+        <span class="overs-value"><b id="oversVal">—</b> overs</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">At the crease</div>
+      <div class="batsmen" id="batsmenWrap">
+        <div class="bat-row"><span class="bat-indicator"></span><span class="bat-name">—</span><span class="bat-score">—</span></div>
+        <div class="bat-row"><span class="bat-indicator"></span><span class="bat-name">—</span><span class="bat-score">—</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">Bowling</div>
+      <div class="bowler-row">
+        <span class="bowler-name" id="bowlerName">—</span>
+        <span class="bowler-tag">CURRENT OVER</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">Recent balls</div>
+      <div class="recent-row" id="recentWrap">
+        <span class="chip-empty">—</span>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="marquee-track" id="marquee">
+      <span>🏏 TEAM VIRU</span><span class="dim">LIVE CRICKET SCOREBOARD</span><span>🏏 TEAM VIRU</span><span class="dim">UPDATES EVERY FEW SECONDS</span>
+      <span>🏏 TEAM VIRU</span><span class="dim">LIVE CRICKET SCOREBOARD</span><span>🏏 TEAM VIRU</span><span class="dim">UPDATES EVERY FEW SECONDS</span>
+    </div>
+  </footer>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== CONFIG ======
+  const API_URL = "https://live-score-api.viruna-randinu.workers.dev/";
+  const REFRESH_MS = 5000;
+
+  // ====== DOM refs ======
+  const $clock       = document.getElementById('clock');
+  const $liveDot     = document.getElementById('liveDot');
+  const $teamName    = document.getElementById('teamName');
+  const $scoreVal    = document.getElementById('scoreVal');
+  const $oversVal    = document.getElementById('oversVal');
+  const $batsmenWrap = document.getElementById('batsmenWrap');
+  const $bowlerName  = document.getElementById('bowlerName');
+  const $recentWrap  = document.getElementById('recentWrap');
+  const $particles   = document.getElementById('particles');
+  const $flashes     = document.getElementById('flashes');
+
+  // ====== EFFECTS GENERATOR (100% Performance Safe) ======
+  // Generate floating stadium dust
+  function createParticles() {
+    const frag = document.createDocumentFragment();
+    for(let i = 0; i < 40; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random() * 100 + 'vw';
+      p.style.top = Math.random() * 100 + 'vh';
+      p.style.animationDuration = (Math.random() * 10 + 5) + 's';
+      p.style.animationDelay = '-' + (Math.random() * 10) + 's';
+      p.style.transform = `scale(${Math.random() * 1.5 + 0.5})`;
+      frag.appendChild(p);
+    }
+    $particles.appendChild(frag);
+  }
+  createParticles();
+
+  // Random stadium camera flashes
+  function triggerFlash() {
+    const flash = document.createElement('div');
+    flash.className = 'camera-flash';
+    flash.style.left = Math.random() * 90 + 5 + 'vw';
+    flash.style.top = Math.random() * 90 + 5 + 'vh';
+    $flashes.appendChild(flash);
+    setTimeout(() => {
+      if(flash.parentNode) flash.parentNode.removeChild(flash);
+    }, 1000);
+    
+    // Schedule next flash randomly between 2s and 10s
+    setTimeout(triggerFlash, Math.random() * 8000 + 2000);
+  }
+  triggerFlash();
+
+  // ====== helpers ======
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function dash(v){
+    if (v === undefined || v === null) return '—';
+    const s = String(v).trim();
+    return (!s || s.toLowerCase() === 'not found') ? '—' : s;
+  }
+  function setText(el, text){
+    if (el.textContent === text) return;
+    el.textContent = text;
+    el.classList.remove('flip');
+    void el.offsetWidth; // force reflow so the animation restarts
+    el.classList.add('flip');
+  }
+  function classifyBall(tokRaw){
+    const t = tokRaw.trim().toUpperCase();
+    if (t === 'W' || t === 'OUT') return 'wicket';
+    if (t === '6') return 'six';
+    if (t === '4') return 'four';
+    if (/^\d+$/.test(t)) return 'zero';
+    return 'other';
+  }
+
+  // ====== Colombo live clock ======
+  const timeFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  });
+  const dateFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Colombo', weekday: 'short', day: '2-digit', month: 'short'
+  });
+  function tickClock(){
+    const now = new Date();
+    $clock.innerHTML = `${dateFmt.format(now)} &nbsp;•&nbsp; <b>${timeFmt.format(now)}</b> (Colombo)`;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // ====== render helpers ======
+  function renderBatsmen(batsmen){
+    if (!Array.isArray(batsmen) || batsmen.length === 0){
+      $batsmenWrap.innerHTML = '<div class="bat-row"><span class="bat-name">—</span><span class="bat-score">—</span></div>';
+      return;
+    }
+    $batsmenWrap.innerHTML = batsmen.map(b => {
+      let name = dash(b && b.name);
+      let striker = false;
+      if (name.endsWith('*')){
+        striker = true;
+        name = name.replace(/\*\s*$/, '').trim();
+      }
+      const score = dash(b && b.score);
+      return `<div class="bat-row${striker ? ' striker' : ''}">
+                <span class="bat-indicator">${striker ? '🏏' : ''}</span>
+                <span class="bat-name">${escapeHtml(name)}</span>
+                <span class="bat-score">${escapeHtml(score)}</span>
+              </div>`;
+    }).join('');
+  }
+
+  function renderRecent(recentStr){
+    const tokens = dash(recentStr) === '—' ? [] : String(recentStr).split(/[\s,]+/).filter(Boolean);
+    if (tokens.length === 0){
+      $recentWrap.innerHTML = '<span class="chip-empty">—</span>';
+      return;
+    }
+    $recentWrap.innerHTML = tokens.map((t, i) =>
+      `<span class="chip ${classifyBall(t)}" style="animation-delay: ${i * 0.1}s">${escapeHtml(t)}</span>`
+    ).join('');
+  }
+
+  function setStatus(state){
+    $liveDot.classList.toggle('err', state === 'error');
+  }
+
+  // ====== main poll loop ======
+  async function refresh(){
+    try{
+      const res = await fetch(API_URL, { cache: 'no-store' });
+      const data = await res.json();
+
+      if (data.status !== 'success') throw new Error(data.message || 'API returned an error');
+
+      // score comes as "TeamName 80/2" — split into name + runs-wkts
+      const m = String(data.score || '').match(/^(.*)\s(\d+)\/(\d+)$/);
+      if (m){
+        setText($teamName, m[1].trim().toUpperCase());
+        setText($scoreVal, `${m[2]}-${m[3]}`);
+      } else {
+        setText($teamName, '');
+        setText($scoreVal, dash(data.score));
+      }
+
+      setText($oversVal, dash(data.overs));
+      renderBatsmen(data.batsmen);
+
+      const bowler = dash(data.bowler);
+      if ($bowlerName.textContent !== bowler) setText($bowlerName, bowler);
+
+      // Only re-render recent if it changed to trigger the pop-in animations again
+      if($recentWrap.dataset.last !== dash(data.recent)) {
+        renderRecent(data.recent);
+        $recentWrap.dataset.last = dash(data.recent);
+      }
+
+      setStatus('live');
+    } catch (err){
+      setStatus('error');
+    }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
